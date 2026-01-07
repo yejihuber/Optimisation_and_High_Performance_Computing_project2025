@@ -10,10 +10,10 @@ import numpy as np
 # -------------------------
 
 # 8 values for T0 (exactly as requested: 8x8=64)
-T0_GRID = np.array([0.05, 0.10, 0.20, 0.50, 1.0, 2.0, 5.0, 10.0], dtype=float)
+T0_GRID = np.array([0.10, 0.20, 0.50, 1.0, 2.0, 5.0, 8.0, 10.0], dtype=float)
 
 # 8 values for sigma (log spaced usually makes most sense)
-SIGMA_GRID = np.logspace(-10, -3, 8, dtype=float)
+SIGMA_GRID = np.logspace(-11, -4, 8, dtype=float)
 
 # NOTE: your notebook parameterization uses Ts/Td pairs (10 phases -> 20 params)
 X0 = np.array([0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5,
@@ -57,7 +57,7 @@ def model(t, x):
     return out.item() if out.size == 1 else out
 
 
-def sa_tune(x0, T0, sigma, f, n_iter=6000, thinning=50, seed=0):
+def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
     rng = np.random.default_rng(seed)
 
     x = x0.copy()
