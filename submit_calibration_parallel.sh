@@ -26,6 +26,6 @@ srun python3 calibrate_parallel.py \
   --T0 "${T0_OPT}" \
   --sigma "${SIGMA_OPT}" \
   --n_chains 10 \
-  --n_iter 15000 \
-  --burn_in 10000 \
+  --n_iter 250000 \
+  --burn_in 250000 \
   --outdir results_calibration
