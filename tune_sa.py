@@ -2,7 +2,6 @@
 import argparse
 import json
 import os
-import sys
 import time
 import numpy as np
 import multiprocessing as mp
@@ -180,15 +179,9 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
 
     # Load data once (shared across workers)
-    if not os.path.exists(DATA_FILE):
-        raise FileNotFoundError(f"Data file not found: {DATA_FILE}. Current directory: {os.getcwd()}")
-    
-    try:
-        data = np.loadtxt(DATA_FILE, delimiter=",", skiprows=1)
-        time_points = data[:, 0]
-        data_points = data[:, 1]
-    except Exception as e:
-        raise RuntimeError(f"Failed to load data file {DATA_FILE}: {e}")
+    data = np.loadtxt(DATA_FILE, delimiter=",", skiprows=1)
+    time_points = data[:, 0]
+    data_points = data[:, 1]
 
     # Determine which indices to run
     if args.idx is not None:
@@ -238,10 +231,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        import traceback
-        print(f"ERROR: {e}", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
-        sys.exit(1)
+    main()
