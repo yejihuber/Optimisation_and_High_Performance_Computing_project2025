@@ -5,6 +5,9 @@ import os
 import time
 import numpy as np
 import multiprocessing as mp
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend for cluster
+import matplotlib.pyplot as plt
 
 # -------------------------
 # Project-specific settings
@@ -99,7 +102,7 @@ def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
 
 def _worker_run_one_idx(args):
     """Worker function to run one hyperparameter combination."""
-    (idx, n_iter, thinning, seed, outdir, time_points, data_points) = args
+    (idx, n_iter, thinning, seed, outdir, time_points, data_points, save_plots) = args
     
     # Map idx -> (i, j) for an 8x8 grid
     i = idx // 8
@@ -126,6 +129,21 @@ def _worker_run_one_idx(args):
     final_x = chain[-1].tolist()
     final_mse = float(loss_hist[-1])
     
+    # Create visualization: MSE curve over iterations (similar to notebook)
+    plot_path = None
+    if save_plots:
+        plt.figure(figsize=(10, 6))
+        plt.plot(loss_hist, linewidth=1.5)
+        plt.xlabel('Iteration (thinned)', fontsize=12)
+        plt.ylabel('MSE', fontsize=12)
+        plt.title(f'Tuning idx={idx}: T0={T0}, σ={sigma:.2e}\nFinal MSE={final_mse:.6e}', fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.yscale('log')  # Log scale often better for MSE
+        
+        plot_path = os.path.join(outdir, f"mse_curve_{idx:02d}.png")
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.close()
+    
     out = {
         "idx": idx,
         "T0": T0,
@@ -141,7 +159,8 @@ def _worker_run_one_idx(args):
     with open(out_path, "w") as f:
         json.dump(out, f, indent=2)
     
-    return f"[idx={idx}] T0={T0} sigma={sigma} final_mse={final_mse} -> {out_path}"
+    plot_msg = f" (plot: {plot_path})" if save_plots and plot_path else ""
+    return f"[idx={idx}] T0={T0} sigma={sigma} final_mse={final_mse} -> {out_path}{plot_msg}"
 
 
 def main():
@@ -153,6 +172,8 @@ def main():
     ap.add_argument("--n_iter", type=int, default=6000)
     ap.add_argument("--thinning", type=int, default=50)
     ap.add_argument("--seed", type=int, default=1234)
+    ap.add_argument("--save_plots", action="store_true", default=True, help="Save MSE curve plots (default: True)")
+    ap.add_argument("--no_plots", dest="save_plots", action="store_false", help="Disable plot saving")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -185,7 +206,7 @@ def main():
 
     # Prepare worker inputs
     worker_inputs = [
-        (idx, args.n_iter, args.thinning, args.seed, args.outdir, time_points, data_points)
+        (idx, args.n_iter, args.thinning, args.seed, args.outdir, time_points, data_points, args.save_plots)
         for idx in indices
     ]
 
