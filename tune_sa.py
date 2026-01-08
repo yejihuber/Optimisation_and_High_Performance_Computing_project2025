@@ -5,9 +5,16 @@ import os
 import time
 import numpy as np
 import multiprocessing as mp
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend for cluster
-import matplotlib.pyplot as plt
+
+# Try to import matplotlib, but make it optional
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # Non-interactive backend for cluster
+    import matplotlib.pyplot as plt
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+    print("Warning: matplotlib not available. Plots will be skipped.")
 
 # -------------------------
 # Project-specific settings
@@ -131,7 +138,7 @@ def _worker_run_one_idx(args):
     
     # Create visualization: MSE curve over iterations (similar to notebook)
     plot_path = None
-    if save_plots:
+    if save_plots and HAS_MATPLOTLIB:
         plt.figure(figsize=(10, 6))
         plt.plot(loss_hist, linewidth=1.5)
         plt.xlabel('Iteration (thinned)', fontsize=12)
@@ -143,6 +150,8 @@ def _worker_run_one_idx(args):
         plot_path = os.path.join(outdir, f"mse_curve_{idx:02d}.png")
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         plt.close()
+    elif save_plots and not HAS_MATPLOTLIB:
+        print(f"Warning: Skipping plot for idx={idx} (matplotlib not available)")
     
     out = {
         "idx": idx,
