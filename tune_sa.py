@@ -206,16 +206,10 @@ def main():
         raise ValueError("Must specify either --idx or both --start_idx and --end_idx")
 
     # Use SLURM CPU allocation if present, otherwise use all available cores
-    slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
-    if slurm_cpus:
-        n_workers = int(slurm_cpus)
-    else:
-        n_workers = min(mp.cpu_count(), len(indices))
+    n_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", mp.cpu_count()))
     
     # Don't use more workers than indices
     n_workers = min(n_workers, len(indices))
-    
-    print(f"Using {n_workers} workers for {len(indices)} indices", file=sys.stderr)
 
     # Prepare worker inputs
     worker_inputs = [
@@ -230,13 +224,6 @@ def main():
         results = list(map(_worker_run_one_idx, worker_inputs))
     else:
         # Parallel execution
-        # Use 'spawn' start method for better compatibility with SLURM
-        try:
-            mp.set_start_method('spawn', force=True)
-        except RuntimeError:
-            # Start method already set, ignore
-            pass
-        
         with mp.Pool(processes=n_workers) as pool:
             results = pool.map(_worker_run_one_idx, worker_inputs)
 
