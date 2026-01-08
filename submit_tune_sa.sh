@@ -17,5 +17,5 @@ module load USS/2022 gcc/9.4.0-pe5.34 python/3.9.12-pe5.34
 srun python3 tune_sa.py \
   --idx "${SLURM_ARRAY_TASK_ID}" \
   --outdir results_tuning \
-  --n_iter 6000 \
-  --thinning 50
+  --n_iter 250000 \
+  --thinning 10
