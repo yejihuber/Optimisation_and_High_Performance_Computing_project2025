@@ -8,11 +8,6 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=8GB
 #SBATCH --constraint=rhel8
-#SBATCH --chdir=/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025
-
-# Change to the project directory (adjust path as needed)
-# If you're already in /cfs/earth/scratch, you can use a relative path
-cd /cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025 || exit 1
 
 module purge
 module load DefaultModules
