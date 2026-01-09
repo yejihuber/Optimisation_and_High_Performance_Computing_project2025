@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --array=0-1
 #SBATCH --job-name=ohpc-tune
-#SBATCH --time=0-00:10:00
+#SBATCH --time=0-01:00:00
 #SBATCH --partition=earth-3
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

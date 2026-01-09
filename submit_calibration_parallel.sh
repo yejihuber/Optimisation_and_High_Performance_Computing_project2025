@@ -19,8 +19,8 @@ module load USS/2022 gcc/9.4.0-pe5.34 python/3.9.12-pe5.34
 # micromamba activate mp
 
 # IMPORTANT: set these to the best values found from tuning (or pass them via sbatch export)
-T0_OPT=${T0_OPT:-1.0}
-SIGMA_OPT=${SIGMA_OPT:-1e-6}
+T0_OPT=${T0_OPT:10.0}
+SIGMA_OPT=${SIGMA_OPT:1e-5}
 
 srun python3 calibrate_parallel.py \
   --T0 "${T0_OPT}" \
