@@ -6,6 +6,19 @@ import time
 import numpy as np
 import multiprocessing as mp
 
+# Try to import numba for performance optimization
+try:
+    from numba import njit
+    HAS_NUMBA = True
+except ImportError:
+    HAS_NUMBA = False
+    # Dummy decorator if numba not available
+    def njit(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    print("Warning: numba not available. Running without JIT compilation.")
+
 # Keep same initial x0 as notebook
 X0 = np.array([0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5,
                0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5], dtype=float)
@@ -27,7 +40,9 @@ T0ARRAY = np.array([
 DATA_FILE = "data_Team9.csv"
 
 
-def model(t, x):
+# Original model function (for comparison)
+def model_original(t, x):
+    """Original model implementation without numba optimization."""
     Ts = x[::2]
     Td = x[1::2]
     intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(len(T0ARRAY) - 1)]
@@ -42,7 +57,46 @@ def model(t, x):
     return out.item() if out.size == 1 else out
 
 
-def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0):
+# Optimized model function with numba JIT compilation
+@njit(cache=True)
+def _model_numba_core(t_arr, Ts, Td, T0ARRAY):
+    """Numba-optimized core computation."""
+    n_points = len(t_arr)
+    n_phases = len(Ts)
+    out = np.zeros(n_points, dtype=np.float64)
+    
+    for i in range(n_points):
+        t_val = t_arr[i]
+        for ix in range(n_phases):
+            a = T0ARRAY[ix]
+            b = T0ARRAY[ix + 1]
+            if a <= t_val < b:
+                diff = t_val - a
+                out[i] = (diff / Ts[ix]) ** 2 * np.exp(-(diff / Td[ix]) ** 2)
+                break
+    return out
+
+
+def model(t, x):
+    """Optimized model function using numba if available."""
+    Ts = x[::2]
+    Td = x[1::2]
+    t = np.atleast_1d(t)
+    
+    if HAS_NUMBA:
+        out = _model_numba_core(t, Ts, Td, T0ARRAY)
+    else:
+        # Fallback to original implementation
+        intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(len(T0ARRAY) - 1)]
+        out = np.zeros_like(t, dtype=float)
+        for ix, (a, b) in enumerate(intervals):
+            mask = (a <= t) & (t < b)
+            out[mask] = ((t[mask] - T0ARRAY[ix]) / Ts[ix]) ** 2 * np.exp(-((t[mask] - T0ARRAY[ix]) / Td[ix]) ** 2)
+    
+    return out.item() if out.size == 1 else out
+
+
+def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0, measure_iter_time=False):
     rng = np.random.default_rng(seed)
 
     x = x0.copy()
@@ -55,47 +109,96 @@ def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0):
 
     T = T0
     keep_i = 0
-
-    for it in range(1, n_iter + 1):
-        x_old = x
-        x_prop = x_old + rng.multivariate_normal(means, cov)
-
-        dE = f(x_prop) - f(x_old)
-        # For optimization we divide by T (your notebook style)
-        if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
-            x = x_prop
-
-        # linear cooling
-        T = T0 * (1 - it / n_iter)
-
-        if it > burn_in:
-            out[keep_i] = x
-            keep_i += 1
-
+    
+    # Measure single iteration time
+    iter_times = []
+    if measure_iter_time:
+        # Warm-up iterations (first 100 iterations)
+        for it in range(1, min(101, n_iter + 1)):
+            x_old = x
+            x_prop = x_old + rng.multivariate_normal(means, cov)
+            dE = f(x_prop) - f(x_old)
+            if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
+                x = x_prop
+            T = T0 * (1 - it / n_iter)
+        
+        # Measure iteration time (sample 1000 iterations)
+        sample_size = min(1000, n_iter - 100)
+        for sample_idx in range(sample_size):
+            it = 101 + sample_idx
+            iter_start = time.perf_counter()
+            
+            x_old = x
+            x_prop = x_old + rng.multivariate_normal(means, cov)
+            dE = f(x_prop) - f(x_old)
+            if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
+                x = x_prop
+            T = T0 * (1 - it / n_iter)
+            
+            iter_end = time.perf_counter()
+            iter_times.append(iter_end - iter_start)
+            
+            if it > burn_in:
+                out[keep_i] = x
+                keep_i += 1
+        
+        # Continue with remaining iterations
+        for it in range(101 + sample_size, n_iter + 1):
+            x_old = x
+            x_prop = x_old + rng.multivariate_normal(means, cov)
+            dE = f(x_prop) - f(x_old)
+            if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
+                x = x_prop
+            T = T0 * (1 - it / n_iter)
+            if it > burn_in:
+                out[keep_i] = x
+                keep_i += 1
+    else:
+        # Normal execution without timing
+        for it in range(1, n_iter + 1):
+            x_old = x
+            x_prop = x_old + rng.multivariate_normal(means, cov)
+            dE = f(x_prop) - f(x_old)
+            if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
+                x = x_prop
+            T = T0 * (1 - it / n_iter)
+            if it > burn_in:
+                out[keep_i] = x
+                keep_i += 1
+    
+    if measure_iter_time:
+        return out, iter_times
     return out
 
 
 def _worker_run_one_chain(args):
-    (chain_id, x0, T0, sigma, n_iter, burn_in, seed, time_points, data_points) = args
+    (chain_id, x0, T0, sigma, n_iter, burn_in, seed, time_points, data_points, measure_iter_time) = args
 
     def mse(x):
         return float(np.mean((data_points - model(time_points, x)) ** 2))
 
-    samples = sa_optimize(
+    result = sa_optimize(
         x0=x0,
         T0=T0,
         sigma=sigma,
         f=mse,
         n_iter=n_iter,
         burn_in=burn_in,
-        seed=seed + chain_id
+        seed=seed + chain_id,
+        measure_iter_time=measure_iter_time
     )
+    
+    if measure_iter_time:
+        samples, iter_times = result
+    else:
+        samples = result
+        iter_times = None
 
     # return only what we need (saves memory)
     # Using the average of samples as a simple chain summary
     chain_mean = np.mean(samples, axis=0)
     chain_final_mse = mse(chain_mean)
-    return chain_mean, chain_final_mse
+    return chain_mean, chain_final_mse, iter_times
 
 
 def main():
@@ -107,6 +210,8 @@ def main():
     ap.add_argument("--burn_in", type=int, default=10000)
     ap.add_argument("--seed", type=int, default=777)
     ap.add_argument("--outdir", type=str, default="results_calibration")
+    ap.add_argument("--measure_iter_time", action="store_true", 
+                    help="Measure single iteration timing (for performance analysis)")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -127,7 +232,7 @@ def main():
 
     # Prepare worker inputs
     worker_inputs = [
-        (cid, x0_list[cid], args.T0, args.sigma, args.n_iter, args.burn_in, args.seed, time_points, data_points)
+        (cid, x0_list[cid], args.T0, args.sigma, args.n_iter, args.burn_in, args.seed, time_points, data_points, args.measure_iter_time)
         for cid in range(args.n_chains)
     ]
 
@@ -141,12 +246,35 @@ def main():
 
     t1 = time.perf_counter()
     wall = t1 - t0
+    
+    # Extract iteration timing if measured
+    iter_times_all = []
+    if args.measure_iter_time:
+        iter_times_all = [r[2] for r in results if r[2] is not None]
+        if iter_times_all:
+            all_iter_times = np.concatenate(iter_times_all)
+            avg_iter_time = np.mean(all_iter_times)
+            std_iter_time = np.std(all_iter_times)
+            print(f"\nPerformance Analysis:")
+            print(f"  Average single iteration time: {avg_iter_time*1000:.4f} ms")
+            print(f"  Std deviation: {std_iter_time*1000:.4f} ms")
+            print(f"  Wall time per iteration (wall_time/n_iter): {wall/args.n_iter*1000:.4f} ms")
+            print(f"  Total iterations: {args.n_iter}")
+            print(f"  Measured iterations: {len(all_iter_times)}")
 
-    chain_means = np.vstack([r[0] for r in results])
+    # Collect results from all independent runs (chains) into one numpy array
+    # Each row represents one chain's mean parameter values
+    chain_means = np.vstack([r[0] for r in results])  # Shape: (n_chains, n_params)
     chain_mses = np.array([r[1] for r in results], dtype=float)
 
-    # Center-of-mass style final estimate: average over chain means
-    center_of_mass = np.mean(chain_means, axis=0)
+    # Calculate Center of Mass: average over all chains for each parameter
+    # This gives the best estimation for the model parameters
+    center_of_mass = np.mean(chain_means, axis=0)  # Shape: (n_params,)
+    
+    print(f"\nCollected {len(chain_means)} independent runs")
+    print(f"Chain means array shape: {chain_means.shape}")
+    print(f"Center of Mass (best estimation) shape: {center_of_mass.shape}")
+    print(f"Number of model parameters: {len(center_of_mass)}")
 
     # Final MSE of the center-of-mass
     final_pred = model(time_points, center_of_mass)
@@ -160,11 +288,21 @@ def main():
         "burn_in": int(args.burn_in),
         "n_workers": int(n_workers),
         "wall_time_sec": float(wall),
+        "wall_time_per_iter_sec": float(wall / args.n_iter),
         "final_mse": float(final_mse),
         "chain_mse_mean": float(np.mean(chain_mses)),
         "chain_mse_std": float(np.std(chain_mses)),
         "center_of_mass": center_of_mass.tolist(),
+        "has_numba": HAS_NUMBA,
     }
+    
+    # Add iteration timing if measured
+    if args.measure_iter_time and iter_times_all:
+        all_iter_times = np.concatenate(iter_times_all)
+        out["avg_iter_time_sec"] = float(np.mean(all_iter_times))
+        out["std_iter_time_sec"] = float(np.std(all_iter_times))
+        out["min_iter_time_sec"] = float(np.min(all_iter_times))
+        out["max_iter_time_sec"] = float(np.max(all_iter_times))
 
     # Write one JSON per run so you can plot wall-time vs cores later
     out_path = os.path.join(args.outdir, f"calib_workers{n_workers}_chains{args.n_chains}.json")
