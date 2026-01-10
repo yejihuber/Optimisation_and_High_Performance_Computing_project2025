@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --array=0-5
 #SBATCH --job-name=ohpc-calib-scaling
-#SBATCH --time=0-00:20:00
+#SBATCH --time=0-02:00:00
 #SBATCH --partition=earth-3
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -45,5 +45,5 @@ python3 calibrate_parallel.py \
   --sigma "${SIGMA_OPT}" \
   --n_chains 10 \
   --n_iter 250000 \
-  --burn_in 250000 \
+  --burn_in 50000 \
   --outdir results_calibration
