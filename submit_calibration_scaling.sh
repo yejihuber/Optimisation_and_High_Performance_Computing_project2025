@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=8GB
 #SBATCH --constraint=rhel8
-#SBATCH --chdir=/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025
+#SBATCH --chdir=/cfs/earth/scratch/plospen1/Optimisation_and_High_Performance_Computing_project2025
 
 # Array task mapping:
 # 0 -> 1 core
