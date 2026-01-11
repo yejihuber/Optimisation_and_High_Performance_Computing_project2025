@@ -1,0 +1,4 @@
+usage: tune_sa.py [-h] --idx IDX [--outdir OUTDIR] [--n_iter N_ITER]
+                  [--thinning THINNING] [--seed SEED]
+tune_sa.py: error: the following arguments are required: --idx
+srun: error: node020: task 0: Exited with exit code 2

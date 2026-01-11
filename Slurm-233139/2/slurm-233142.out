@@ -1,0 +1,8 @@
+Running calibration with 4 cores
+
+Collected 10 independent runs
+Chain means array shape: (10, 20)
+Center of Mass (best estimation) shape: (20,)
+Number of model parameters: 20
+Saved calibration result -> results_calibration/calib_workers4_chains10.json
+Workers=4 wall_time=1244.62s final_mse=595.149
