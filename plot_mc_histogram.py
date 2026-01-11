@@ -133,7 +133,7 @@ def main():
     ap.add_argument("--sigma", type=float, default=1e-5, help="Jump standard deviation")
     ap.add_argument("--n_iter", type=int, default=250000, help="Total iterations")
     ap.add_argument("--burn_in_values", type=int, nargs='+', 
-                   default=[0, 5000, 10000, 20000, 30000],
+                   default=[0, 25000, 50000, 70000],
                    help="Burn-in values to compare (0 means no burn-in)")
     ap.add_argument("--outdir", type=str, default="results_burnin_analysis",
                    help="Output directory")
