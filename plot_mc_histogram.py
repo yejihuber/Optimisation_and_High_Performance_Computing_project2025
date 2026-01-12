@@ -14,7 +14,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, '.')
 from calibrate_parallel import (
-    X0, T0ARRAY, DATA_FILE, model
+    X0, DATA_FILE, model
 )
 
 
@@ -65,12 +65,21 @@ def sa_optimize_with_trace(x0, T0, sigma, f, n_iter=250000, seed=0):
 def plot_parameter_histograms(samples, mse_values, burn_in_values, output_file="mc_histogram.png"):
     """
     Plot histograms of parameters comparing different burn_in values.
+    Supports both 20-parameter (Ts, Td) and 30-parameter (T0, Ts, Td) models.
     """
     n_params = samples.shape[1]
     
-    # Select representative parameters: first 3 phases (Ts1, Td1, Ts2, Td2, Ts3, Td3)
-    param_indices = [0, 1, 2, 3, 4, 5]
-    param_names = ['Ts1', 'Td1', 'Ts2', 'Td2', 'Ts3', 'Td3']
+    # Determine parameter structure based on number of parameters
+    if n_params == 30:
+        # 30-parameter structure: [T0_1..T0_10, Ts0..Ts9, Td0..Td9]
+        # Select representative: T0_1, T0_2, Ts0, Ts1, Td0, Td1
+        param_indices = [0, 1, 10, 11, 20, 21]  # T0_1, T0_2, Ts0, Ts1, Td0, Td1
+        param_names = ['T0_1', 'T0_2', 'Ts0', 'Ts1', 'Td0', 'Td1']
+    else:
+        # 20-parameter structure: [Ts0, Td0, Ts1, Td1, ...]
+        # Select representative parameters: first 3 phases (Ts1, Td1, Ts2, Td2, Ts3, Td3)
+        param_indices = [0, 1, 2, 3, 4, 5]
+        param_names = ['Ts1', 'Td1', 'Ts2', 'Td2', 'Ts3', 'Td3']
     
     n_burnins = len(burn_in_values)
     fig, axes = plt.subplots(len(param_indices), n_burnins, figsize=(4*n_burnins, 3*len(param_indices)))
@@ -178,11 +187,17 @@ def main():
     
     # Plot histograms
     print("\nGenerating histograms...")
+    # Generate output filename based on n_iter
+    if args.n_iter == 500000:
+        output_filename = "mc_histogram_iter5e5.png"
+    else:
+        output_filename = f"mc_histogram_iter{args.n_iter}.png"
+    
     plot_parameter_histograms(samples, mse_values, valid_burn_ins,
-                             output_file=str(outdir / "mc_histogram.png"))
+                             output_file=str(outdir / output_filename))
     
     print(f"\nAnalysis complete! Histogram saved to {outdir}/")
-    print("  - mc_histogram.png: Parameter distributions comparison")
+    print(f"  - {output_filename}: Parameter distributions comparison")
 
 
 if __name__ == "__main__":
