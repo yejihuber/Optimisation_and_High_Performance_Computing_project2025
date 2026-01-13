@@ -72,7 +72,7 @@ def plot_parameter_histograms(samples, mse_values, burn_in_values, output_file="
     # Determine parameter structure based on number of parameters
     if n_params == 30:
         # 30-parameter structure: [T0_1..T0_10, Ts0..Ts9, Td0..Td9]
-        # Select representative: T0_1, T0_2, Ts0, Ts1, Td0, Td1
+        # Select representative: T0_1, T0_2, Ts0, Ts1, Td0, Td1 (6 parameters)
         param_indices = [0, 1, 10, 11, 20, 21]  # T0_1, T0_2, Ts0, Ts1, Td0, Td1
         param_names = ['T0_1', 'T0_2', 'Ts0', 'Ts1', 'Td0', 'Td1']
     else:
@@ -113,7 +113,7 @@ def plot_parameter_histograms(samples, mse_values, burn_in_values, output_file="
             ax.axvline(X0[param_idx], color='red', linestyle='--', 
                       linewidth=1.5, alpha=0.7, label='Initial')
             
-            # Mark mean of post-burn_in samples
+            # Mark mean of post_burnin samples
             post_mean = np.mean(post_burnin_samples[:, param_idx])
             ax.axvline(post_mean, color='darkblue', linestyle='-', 
                       linewidth=1.5, alpha=0.8, label=f'Mean: {post_mean:.3f}')
@@ -188,10 +188,24 @@ def main():
     # Plot histograms
     print("\nGenerating histograms...")
     # Generate output filename based on n_iter
-    if args.n_iter == 500000:
+    if args.n_iter == 250000:
+        output_filename = "mc_histogram_iter2.5e5.png"
+    elif args.n_iter == 500000:
         output_filename = "mc_histogram_iter5e5.png"
+    elif args.n_iter == 1000000:
+        output_filename = "mc_histogram_iter1e6.png"
+    elif args.n_iter == 10000000:
+        output_filename = "mc_histogram_iter1e7.png"
+    elif args.n_iter == 100000000:
+        output_filename = "mc_histogram_iter1e8.png"
     else:
-        output_filename = f"mc_histogram_iter{args.n_iter}.png"
+        # Convert to scientific notation for large numbers
+        if args.n_iter >= 1000000:
+            exp = int(np.log10(args.n_iter))
+            coeff = args.n_iter / (10 ** exp)
+            output_filename = f"mc_histogram_iter{coeff:.0f}e{exp}.png"
+        else:
+            output_filename = f"mc_histogram_iter{args.n_iter}.png"
     
     plot_parameter_histograms(samples, mse_values, valid_burn_ins,
                              output_file=str(outdir / output_filename))

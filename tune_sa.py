@@ -19,25 +19,32 @@ T0_GRID = np.array([0.10, 0.20, 0.50, 1.0, 2.0, 5.0, 8.0, 10.0], dtype=float)
 # 8 values for sigma (log spaced usually makes most sense)
 SIGMA_GRID = np.logspace(-11, -4, 8, dtype=float)
 
-# NOTE: your notebook parameterization uses Ts/Td pairs (10 phases -> 20 params)
-X0 = np.array([0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5,
-               0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5], dtype=float)
-
-# Cycle start times (must be 11 values for 10 phases)
-# This matches the Hathaway-like list your notebook was aiming for.
-T0ARRAY = np.array([
-    1878.9166666667,
-    1890.1666666667,
-    1902.0000000000,
-    1913.5833333333,
-    1923.5833333333,
-    1933.6666666667,
-    1944.0833333333,
-    1954.2500000000,
-    1964.7500000000,
-    1976.1666666667,
-    1986.6666666667
+# Initial parameter array structure: [T0_1, T0_2, ..., T0_10, Ts0, Ts1, ..., Ts9, Td0, Td1, ..., Td9]
+# Total: 10 T0 + 10 Ts + 10 Td = 30 parameters
+# T0_0 (first cycle start) is fixed, T0_1 to T0_10 are optimized
+T0_INITIAL = np.array([
+    1878.9166666667,  # T0_0 (fixed, not optimized)
+    1890.1666666667,  # T0_1 (optimized)
+    1902.0000000000,  # T0_2 (optimized)
+    1913.5833333333,  # T0_3 (optimized)
+    1923.5833333333,  # T0_4 (optimized)
+    1933.6666666667,  # T0_5 (optimized)
+    1944.0833333333,  # T0_6 (optimized)
+    1954.2500000000,  # T0_7 (optimized)
+    1964.7500000000,  # T0_8 (optimized)
+    1976.1666666667,  # T0_9 (optimized)
+    1986.6666666667   # T0_10 (optimized)
 ], dtype=float)
+
+# Initial values: T0_1~T0_10 (10), Ts (10), Td (10) = 30 parameters
+X0 = np.concatenate([
+    T0_INITIAL[1:],  # T0_1 to T0_10 (10 values)
+    np.array([0.3] * 10),  # Ts (10 values)
+    np.array([5.0] * 10)   # Td (10 values)
+], dtype=float)
+
+# Fixed first T0 value
+T0_FIXED = T0_INITIAL[0]
 
 DATA_FILE = "data_Team9.csv"
 
@@ -47,8 +54,17 @@ DATA_FILE = "data_Team9.csv"
 # -------------------------
 
 def model(t, x):
-    Ts = x[::2]
-    Td = x[1::2]
+    """Model function for 30-parameter optimization.
+    Parameter structure: [T0_1, ..., T0_10, Ts0, ..., Ts9, Td0, ..., Td9] (30 params)
+    """
+    n_cycles = 10
+    T0_optimized = x[:n_cycles]  # T0_1 to T0_10
+    Ts = x[n_cycles:2*n_cycles]  # Ts0 to Ts9
+    Td = x[2*n_cycles:]  # Td0 to Td9
+    
+    # Build T0ARRAY: [T0_FIXED, T0_1, T0_2, ..., T0_10]
+    T0ARRAY = np.concatenate([[T0_FIXED], T0_optimized])
+    
     intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(len(T0ARRAY) - 1)]
 
     t = np.atleast_1d(t)
@@ -85,11 +101,11 @@ def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
         x_prop = x_old + rng.multivariate_normal(means, cov)
 
         dE = f(x_prop) - f(x_old)
-        # For tuning we use acceptance without dividing by T (your notebook style)
-        if np.exp(-np.clip(dE, -100, 100)) >= rng.random():
+        # Standard Simulated Annealing acceptance with temperature
+        if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
             x = x_prop
 
-        # linear cooling (same idea as your notebook)
+        # linear cooling schedule
         T = T0 * (1 - it / n_iter)
 
         if it % thinning == 0:
