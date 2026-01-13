@@ -28,12 +28,10 @@ module load USS/2022 gcc/9.4.0-pe5.34 python/3.9.12-pe5.34
 CORES_ARRAY=(1 2 4 8 16 32)
 N_CORES=${CORES_ARRAY[$SLURM_ARRAY_TASK_ID]}
 
-# IMPORTANT: set these to the best values found from tuning
-# Values from OHPC_Team9.ipynb:
-# T0_opt = 10.0
-# sigma_opt = 9.999999999999999e-06 (≈ 1e-5)
-T0_OPT=${T0_OPT:-10.0}
-SIGMA_OPT=${SIGMA_OPT:-1e-5}
+# Performance test parameters
+# T0 = 0.5, sigma = 1e-6
+T0_OPT=${T0_OPT:-0.5}
+SIGMA_OPT=${SIGMA_OPT:-1e-6}
 
 # Export the number of cores for the Python script
 export SLURM_CPUS_PER_TASK=$N_CORES
@@ -46,4 +44,5 @@ python3 calibrate_parallel.py \
   --n_chains 10 \
   --n_iter 250000 \
   --burn_in 50000 \
+  --measure_iter_time \
   --outdir results_calibration
