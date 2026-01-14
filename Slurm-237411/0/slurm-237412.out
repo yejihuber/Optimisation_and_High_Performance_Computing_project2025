@@ -1,0 +1,25 @@
+==========================================
+Running calibration
+==========================================
+Parameters:
+  n_chains=32 (32의 32/32배)
+  n_workers=32 (각 코어당 32/32개 체인 처리)
+  n_iter=500000, burn_in=400000
+  T0=0.5, sigma=1e-6
+
+
+Performance Analysis:
+  Average single iteration time: 1.9961 ms
+  Std deviation: 0.1605 ms
+  Wall time per iteration (wall_time/n_iter): 2.2768 ms
+  Total iterations: 500000
+  Measured iterations: 32000
+
+Collected 32 independent runs
+Chain means array shape: (32, 30)
+Center of Mass (best estimation) shape: (30,)
+Number of model parameters: 30
+Saved calibration result -> results_calibration/calib_workers32_chains32.json
+Workers=32 wall_time=1138.42s final_mse=11635.3
+
+Calibration completed: n_chains=32, n_workers=32

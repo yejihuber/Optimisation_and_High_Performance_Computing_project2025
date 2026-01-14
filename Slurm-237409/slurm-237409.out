@@ -1,0 +1,8 @@
+==========================================
+Running calibration
+==========================================
+Parameters:
+  n_iter=250000, burn_in=200000
+  n_chains=1, n_workers=32
+  T0=0.5, sigma=1e-6
+

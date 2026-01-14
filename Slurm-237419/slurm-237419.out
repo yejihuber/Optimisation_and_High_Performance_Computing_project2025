@@ -1,0 +1,10 @@
+==========================================
+Running calibration with default values
+==========================================
+Parameters:
+  n_chains=10 (default)
+  n_iter=250000 (default)
+  burn_in=200000 (default)
+  n_workers=32
+  T0=0.5, sigma=1e-6
+
