@@ -1,0 +1,31 @@
+==========================================
+Running calibration with histogram-based center of mass
+==========================================
+Parameters:
+  n_chains=10
+  n_iter=250000
+  burn_in=200000
+  n_workers=32
+  T0=0.5, sigma=1e-6
+
+Improvements:
+  - Histogram-based center of mass calculation
+  - Small fixed noise scale: 0.001 (like provided code)
+  - All samples stored for distribution analysis
+
+
+Performance Analysis:
+  Average single iteration time: 1.9271 ms
+  Std deviation: 0.0879 ms
+  Wall time per iteration (wall_time/n_iter): 1.9616 ms
+  Total iterations: 250000
+  Measured iterations: 10000
+
+Collected 500000 samples from 10 chains
+Total samples shape: (500000, 30)
+Calculating histogram-based center of mass for 30 parameters...
+Center of Mass shape: (30,)
+Saved calibration result -> results_calibration/calib_workers32_chains10_histogram_com.json
+Workers=32 wall_time=490.41s final_mse=562.402
+
+Calibration completed

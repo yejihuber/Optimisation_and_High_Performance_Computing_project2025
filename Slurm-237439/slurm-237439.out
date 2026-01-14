@@ -1,0 +1,15 @@
+==========================================
+Scaling Study: Calibration with varying n_workers
+==========================================
+Fixed parameters:
+  T0=0.5
+  sigma=1e-6
+  n_chains=32
+  n_iter=250000
+  burn_in=200000
+
+Varying n_workers: 1 2 4 8 16 32
+
+==========================================
+Running with n_workers=1
+==========================================

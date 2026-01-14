@@ -271,11 +271,9 @@ def _worker_run_one_chain(args):
         samples = result
         iter_times = None
 
-    # return only what we need (saves memory)
-    # Using the average of samples as a simple chain summary
-    chain_mean = np.mean(samples, axis=0)
-    chain_final_mse = mse(chain_mean)
-    return chain_mean, chain_final_mse, iter_times
+    # Return all samples for histogram-based center of mass calculation
+    # This uses more memory but allows better estimation using distribution information
+    return samples, iter_times
 
 
 def main():
@@ -310,16 +308,12 @@ def main():
     data_points = data[:, 1]
 
     # Create noisy initial conditions for each chain
+    # Similar to provided code: use small fixed noise scale (0.001) for all parameters
     n_params = X0.shape[0]
     rng = np.random.default_rng(args.seed)
-    # Reduced noise scale to keep initial conditions closer to X0
-    # This helps maintain T0 values near initial values, especially with constraints
-    # T0: smaller noise (0.01 * abs + 0.1) to stay close to initial values
-    # Ts, Td: smaller noise (0.01 * abs + 1e-7) for consistency
-    noise_scale = np.concatenate([
-        0.01 * np.abs(X0[:10]) + 0.1,  # T0 parameters: reduced noise (~0.5% of value)
-        0.01 * np.abs(X0[10:]) + 1e-7  # Ts and Td parameters: reduced noise (~3% of value)
-    ])
+    # Use small fixed noise scale like provided code: params0noisy = params_from_tuning + np.random.normal(0, 0.001, ...)
+    # This keeps initial conditions very close to X0
+    noise_scale = 0.001  # Fixed small noise scale (not proportional to parameter values)
     x0_list = np.abs(X0 + rng.normal(0, noise_scale, size=(args.n_chains, n_params)))
 
     # Prepare worker inputs
@@ -339,38 +333,72 @@ def main():
     t1 = time.perf_counter()
     wall = t1 - t0
     
-    # Extract iteration timing if measured
+    # Extract iteration timing if measured and collect all samples
     iter_times_all = []
-    if args.measure_iter_time:
-        iter_times_all = [r[2] for r in results if r[2] is not None]
-        if iter_times_all:
-            all_iter_times = np.concatenate(iter_times_all)
-            avg_iter_time = np.mean(all_iter_times)
-            std_iter_time = np.std(all_iter_times)
-            print(f"\nPerformance Analysis:")
-            print(f"  Average single iteration time: {avg_iter_time*1000:.4f} ms")
-            print(f"  Std deviation: {std_iter_time*1000:.4f} ms")
-            print(f"  Wall time per iteration (wall_time/n_iter): {wall/args.n_iter*1000:.4f} ms")
-            print(f"  Total iterations: {args.n_iter}")
-            print(f"  Measured iterations: {len(all_iter_times)}")
-
-    # Collect results from all independent runs (chains) into one numpy array
-    # Each row represents one chain's mean parameter values
-    chain_means = np.vstack([r[0] for r in results])  # Shape: (n_chains, n_params)
-    chain_mses = np.array([r[1] for r in results], dtype=float)
-
-    # Calculate Center of Mass: average over all chains for each parameter
-    # This gives the best estimation for the model parameters
-    center_of_mass = np.mean(chain_means, axis=0)  # Shape: (n_params,)
+    all_samples_list = []
     
-    print(f"\nCollected {len(chain_means)} independent runs")
-    print(f"Chain means array shape: {chain_means.shape}")
-    print(f"Center of Mass (best estimation) shape: {center_of_mass.shape}")
-    print(f"Number of model parameters: {len(center_of_mass)}")
+    if args.measure_iter_time:
+        for r in results:
+            samples, iter_times = r
+            all_samples_list.append(samples)
+            if iter_times is not None:
+                iter_times_all.append(iter_times)
+    else:
+        for r in results:
+            samples = r
+            all_samples_list.append(samples)
+    
+    # Concatenate all samples from all chains into one array
+    # Shape: (n_chains * (n_iter - burn_in), n_params)
+    all_samples = np.vstack(all_samples_list)
+    
+    if iter_times_all:
+        all_iter_times = np.concatenate(iter_times_all)
+        avg_iter_time = np.mean(all_iter_times)
+        std_iter_time = np.std(all_iter_times)
+        print(f"\nPerformance Analysis:")
+        print(f"  Average single iteration time: {avg_iter_time*1000:.4f} ms")
+        print(f"  Std deviation: {std_iter_time*1000:.4f} ms")
+        print(f"  Wall time per iteration (wall_time/n_iter): {wall/args.n_iter*1000:.4f} ms")
+        print(f"  Total iterations: {args.n_iter}")
+        print(f"  Measured iterations: {len(all_iter_times)}")
+
+    # Calculate Center of Mass using histogram-based weighted average
+    # This method considers the distribution of samples, giving more weight to frequent values
+    n_params = all_samples.shape[1]
+    center_of_mass = np.zeros(n_params)
+    
+    print(f"\nCollected {len(all_samples)} samples from {args.n_chains} chains")
+    print(f"Total samples shape: {all_samples.shape}")
+    print(f"Calculating histogram-based center of mass for {n_params} parameters...")
+    
+    for ix in range(n_params):
+        counts, bin_edges = np.histogram(all_samples[:, ix], bins=20)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        # Calculate weighted average: sum(bin_center * count) / sum(count)
+        # This gives more weight to bins with more samples
+        if np.sum(counts) > 0:
+            center_of_mass[ix] = np.sum(bin_centers * counts) / np.sum(counts)
+        else:
+            # Fallback to simple mean if histogram fails
+            center_of_mass[ix] = np.mean(all_samples[:, ix])
+    
+    print(f"Center of Mass shape: {center_of_mass.shape}")
 
     # Final MSE of the center-of-mass
     final_pred = model(time_points, center_of_mass)
     final_mse = float(np.mean((data_points - final_pred) ** 2))
+    
+    # Calculate chain statistics: compute MSE for each chain's mean
+    chain_mses = []
+    samples_per_chain = len(all_samples) // args.n_chains
+    for chain_idx in range(args.n_chains):
+        start_idx = chain_idx * samples_per_chain
+        end_idx = start_idx + samples_per_chain
+        chain_mean = np.mean(all_samples[start_idx:end_idx], axis=0)
+        chain_mse = float(np.mean((data_points - model(time_points, chain_mean)) ** 2))
+        chain_mses.append(chain_mse)
+    chain_mses = np.array(chain_mses)
 
     out = {
         "T0": float(args.T0),
@@ -386,6 +414,7 @@ def main():
         "chain_mse_std": float(np.std(chain_mses)),
         "center_of_mass": center_of_mass.tolist(),
         "has_numba": HAS_NUMBA,
+        "n_total_samples": int(len(all_samples)),
     }
     
     # Add iteration timing if measured

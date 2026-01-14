@@ -41,7 +41,7 @@ echo "Running calibration with $N_CORES cores"
 python3 calibrate_parallel.py \
   --T0 "${T0_OPT}" \
   --sigma "${SIGMA_OPT}" \
-  --n_chains 10 \
+  --n_chains 32 \
   --n_iter 250000 \
   --burn_in 200000 \
   --measure_iter_time \
