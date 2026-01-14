@@ -19,32 +19,49 @@ except ImportError:
         return decorator
     print("Warning: numba not available. Running without JIT compilation.")
 
-# Keep same initial x0 as notebook
-X0 = np.array([0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5,
-               0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5, 0.3, 5], dtype=float)
-
-T0ARRAY = np.array([
-    1878.9166666667,
-    1890.1666666667,
-    1902.0000000000,
-    1913.5833333333,
-    1923.5833333333,
-    1933.6666666667,
-    1944.0833333333,
-    1954.2500000000,
-    1964.7500000000,
-    1976.1666666667,
-    1986.6666666667
+# Initial parameter array structure: [T0_1, T0_2, ..., T0_10, Ts0, Ts1, ..., Ts9, Td0, Td1, ..., Td9]
+# Total: 10 T0 + 10 Ts + 10 Td = 30 parameters
+# T0_0 (first cycle start) is fixed, T0_1 to T0_10 are optimized
+T0_INITIAL = np.array([
+    1878.9166666667,  # T0_0 (fixed, not optimized)
+    1890.1666666667,  # T0_1 (optimized)
+    1902.0000000000,  # T0_2 (optimized)
+    1913.5833333333,  # T0_3 (optimized)
+    1923.5833333333,  # T0_4 (optimized)
+    1933.6666666667,  # T0_5 (optimized)
+    1944.0833333333,  # T0_6 (optimized)
+    1954.2500000000,  # T0_7 (optimized)
+    1964.7500000000,  # T0_8 (optimized)
+    1976.1666666667,  # T0_9 (optimized)
+    1986.6666666667   # T0_10 (optimized)
 ], dtype=float)
+
+# Initial values: T0_1~T0_10 (10), Ts (10), Td (10) = 30 parameters
+X0 = np.concatenate([
+    T0_INITIAL[1:],  # T0_1 to T0_10 (10 values)
+    np.array([0.3] * 10),  # Ts (10 values)
+    np.array([5.0] * 10)   # Td (10 values)
+], dtype=float)
+
+# Fixed first T0 value
+T0_FIXED = T0_INITIAL[0]
 
 DATA_FILE = "data_Team9.csv"
 
 
 # Original model function (for comparison)
 def model_original(t, x):
-    """Original model implementation without numba optimization."""
-    Ts = x[::2]
-    Td = x[1::2]
+    """Original model implementation without numba optimization.
+    Parameter structure: [T0_1, ..., T0_10, Ts0, ..., Ts9, Td0, ..., Td9] (30 params)
+    """
+    n_cycles = 10
+    T0_optimized = x[:n_cycles]  # T0_1 to T0_10
+    Ts = x[n_cycles:2*n_cycles]  # Ts0 to Ts9
+    Td = x[2*n_cycles:]  # Td0 to Td9
+    
+    # Build T0ARRAY: [T0_FIXED, T0_1, T0_2, ..., T0_10]
+    T0ARRAY = np.concatenate([[T0_FIXED], T0_optimized])
+    
     intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(len(T0ARRAY) - 1)]
 
     t = np.atleast_1d(t)
@@ -60,7 +77,9 @@ def model_original(t, x):
 # Optimized model function with numba JIT compilation
 @njit(cache=True)
 def _model_numba_core(t_arr, Ts, Td, T0ARRAY):
-    """Numba-optimized core computation."""
+    """Numba-optimized core computation.
+    T0ARRAY should include T0_FIXED as first element.
+    """
     n_points = len(t_arr)
     n_phases = len(Ts)
     out = np.zeros(n_points, dtype=np.float64)
@@ -78,9 +97,17 @@ def _model_numba_core(t_arr, Ts, Td, T0ARRAY):
 
 
 def model(t, x):
-    """Optimized model function using numba if available."""
-    Ts = x[::2]
-    Td = x[1::2]
+    """Optimized model function using numba if available.
+    Parameter structure: [T0_1, ..., T0_10, Ts0, ..., Ts9, Td0, ..., Td9] (30 params)
+    """
+    n_cycles = 10
+    T0_optimized = x[:n_cycles]  # T0_1 to T0_10
+    Ts = x[n_cycles:2*n_cycles]  # Ts0 to Ts9
+    Td = x[2*n_cycles:]  # Td0 to Td9
+    
+    # Build T0ARRAY: [T0_FIXED, T0_1, T0_2, ..., T0_10]
+    T0ARRAY = np.concatenate([[T0_FIXED], T0_optimized])
+    
     t = np.atleast_1d(t)
     
     if HAS_NUMBA:
@@ -227,7 +254,12 @@ def main():
     # Create noisy initial conditions for each chain
     n_params = X0.shape[0]
     rng = np.random.default_rng(args.seed)
-    noise_scale = 0.05 * np.abs(X0) + 1e-6
+    # For T0 parameters, use larger noise scale (time values are larger)
+    # For Ts and Td, use smaller noise scale
+    noise_scale = np.concatenate([
+        0.05 * np.abs(X0[:10]) + 1.0,  # T0 parameters: larger noise
+        0.05 * np.abs(X0[10:]) + 1e-6  # Ts and Td parameters: smaller noise
+    ])
     x0_list = np.abs(X0 + rng.normal(0, noise_scale, size=(args.n_chains, n_params)))
 
     # Prepare worker inputs
