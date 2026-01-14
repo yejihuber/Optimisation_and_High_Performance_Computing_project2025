@@ -60,6 +60,7 @@ def model(t, x):
     Td = x[2*n_cycles:]  # Td_1 to Td_10
 
     # T0ARRAY is directly set to T0 values from parameter vector x 
+    T0ARRAY = T0_optimized
 
     # Create intervals: (T0_1, T0_2), (T0_2, T0_3), ..., (T0_9, T0_10), (T0_10, inf)
     # Note: We need 10 intervals for 10 T0 values
