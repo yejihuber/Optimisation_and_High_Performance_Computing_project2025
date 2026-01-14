@@ -4,7 +4,7 @@
 #SBATCH --partition=earth-3
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=32
 #SBATCH --constraint=rhel8
 #SBATCH --exclusive
 
@@ -27,5 +27,5 @@ srun python3 calibrate_parallel.py \
   --sigma "${SIGMA_OPT}" \
   --n_chains 10 \
   --n_iter 250000 \
-  --burn_in 50000 \
+  --burn_in 200000 \
   --outdir results_calibration

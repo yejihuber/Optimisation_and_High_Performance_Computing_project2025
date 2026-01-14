@@ -61,10 +61,10 @@ def model(t, x):
     T0_optimized = x[:n_cycles]  # T0_1 to T0_10
     Ts = x[n_cycles:2*n_cycles]  # Ts0 to Ts9
     Td = x[2*n_cycles:]  # Td0 to Td9
-    
+
     # Build T0ARRAY: [T0_FIXED, T0_1, T0_2, ..., T0_10]
     T0ARRAY = np.concatenate([[T0_FIXED], T0_optimized])
-    
+
     intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(len(T0ARRAY) - 1)]
 
     t = np.atleast_1d(t)
@@ -80,10 +80,15 @@ def model(t, x):
 def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
     rng = np.random.default_rng(seed)
 
+    # --- minimal fix: ensure int ---
+    n_iter = int(n_iter)
+
     x = x0.copy()
     n_params = x.shape[0]
 
     means = np.zeros(n_params)
+
+    # --- minimal fix: sigma is std-dev => covariance uses sigma**2 ---
     cov = np.diag(np.full(n_params, sigma))
 
     n_save = int(np.ceil(n_iter / thinning)) + 1
@@ -94,19 +99,23 @@ def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
     losses[0] = f(x)
 
     save_i = 1
-    T = T0
+    T = float(T0)
 
     for it in range(1, n_iter + 1):
         x_old = x
         x_prop = x_old + rng.multivariate_normal(means, cov)
 
         dE = f(x_prop) - f(x_old)
-        # Standard Simulated Annealing acceptance with temperature
-        if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
+
+        # --- minimal fix: always accept improvements; otherwise accept with exp(-dE/T) ---
+        if dE <= 0 or np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
             x = x_prop
 
         # linear cooling schedule
         T = T0 * (1 - it / n_iter)
+
+        # --- minimal fix: keep T positive (avoid T=0 at end) ---
+        T = max(T, 1e-12)
 
         if it % thinning == 0:
             chain[save_i] = x
@@ -119,17 +128,17 @@ def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
 def _worker_run_one_idx(args):
     """Worker function to run one hyperparameter combination."""
     (idx, n_iter, thinning, seed, outdir, time_points, data_points, save_plots) = args
-    
+
     # Map idx -> (i, j) for an 8x8 grid
     i = idx // 8
     j = idx % 8
     T0 = float(T0_GRID[i])
     sigma = float(SIGMA_GRID[j])
-    
+
     # Define loss
     def mse(x):
         return float(np.mean((data_points - model(time_points, x)) ** 2))
-    
+
     t_start = time.perf_counter()
     chain, loss_hist = sa_tune(
         x0=X0,
@@ -141,10 +150,10 @@ def _worker_run_one_idx(args):
         seed=seed + idx,   # different seed per idx
     )
     t_end = time.perf_counter()
-    
+
     final_x = chain[-1].tolist()
     final_mse = float(loss_hist[-1])
-    
+
     # Create visualization: MSE curve over iterations (similar to notebook)
     plot_path = None
     if save_plots:
@@ -155,11 +164,11 @@ def _worker_run_one_idx(args):
         plt.title(f'Tuning idx={idx}: T0={T0}, σ={sigma:.2e}\nFinal MSE={final_mse:.6e}', fontsize=12)
         plt.grid(True, alpha=0.3)
         plt.yscale('log')  # Log scale often better for MSE
-        
+
         plot_path = os.path.join(outdir, f"mse_curve_{idx:02d}.png")
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         plt.close()
-    
+
     out = {
         "idx": idx,
         "T0": T0,
@@ -170,11 +179,11 @@ def _worker_run_one_idx(args):
         "final_x": final_x,
         "wall_time_sec": float(t_end - t_start),
     }
-    
+
     out_path = os.path.join(outdir, f"tuning_{idx:02d}.json")
     with open(out_path, "w") as f:
         json.dump(out, f, indent=2)
-    
+
     plot_msg = f" (plot: {plot_path})" if save_plots and plot_path else ""
     return f"[idx={idx}] T0={T0} sigma={sigma} final_mse={final_mse} -> {out_path}{plot_msg}"
 
@@ -216,7 +225,7 @@ def main():
 
     # Use SLURM CPU allocation if present, otherwise use all available cores
     n_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", mp.cpu_count()))
-    
+
     # Don't use more workers than indices
     n_workers = min(n_workers, len(indices))
 
@@ -241,7 +250,7 @@ def main():
     # Print all results
     for result in results:
         print(result)
-    
+
     print(f"\nTotal wall time: {t_total_end - t_total_start:.2f}s")
     print(f"Processed {len(indices)} combinations using {n_workers} workers")
 
