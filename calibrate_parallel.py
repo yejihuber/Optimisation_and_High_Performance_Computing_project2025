@@ -52,12 +52,12 @@ def model_original(t, x):
     All T0 values (T0_1 to T0_10) will be optimized (no fixed T0 value)
     """
     n_cycles = 10
-    T0_optimized = x[:n_cycles]  # T0_1 to T0_10 
+    T0 = x[:n_cycles]  # T0_1 to T0_10 
     Ts = x[n_cycles:2*n_cycles]  # Ts_1 to Ts_10
     Td = x[2*n_cycles:]  # Td_1 to Td_10
     
     # T0ARRAY is directly set to T0 values from parameter vector x 
-    T0ARRAY = T0_optimized
+    T0ARRAY = T0 
     
     # Create intervals: (T0_1, T0_2), (T0_2, T0_3), ..., (T0_9, T0_10), (T0_10, inf)
     # Note: We need 10 intervals for 10 T0 values
@@ -104,17 +104,24 @@ def _model_numba_core(t_arr, Ts, Td, T0ARRAY):
     return out
 
 
+# Global flag to control which model function to use (for performance testing)
+USE_ORIGINAL_MODEL = False
+
 def model(t, x):
     """Optimized model function using numba if available.
     Parameter structure: [T0_1, ..., T0_10, Ts0, ..., Ts9, Td0, ..., Td9] (30 params)
     """
+    # For performance testing: use original model if flag is set
+    if USE_ORIGINAL_MODEL:
+        return model_original(t, x)
+    
     n_cycles = 10
-    T0_optimized = x[:n_cycles]  # T0_1 to T0_10 (optimized values from SA)
+    T0 = x[:n_cycles]  # T0_1 to T0_10 (optimized values from SA)
     Ts = x[n_cycles:2*n_cycles]  # Ts_1 to Ts_10
     Td = x[2*n_cycles:]  # Td_1 to Td_10
     
     # T0ARRAY is directly set to T0 values from parameter vector x
-    T0ARRAY = T0_optimized
+    T0ARRAY = T0
     
     t = np.atleast_1d(t)
     
@@ -239,6 +246,7 @@ def _worker_run_one_chain(args):
 
 
 def main():
+    global USE_ORIGINAL_MODEL
     ap = argparse.ArgumentParser()
     ap.add_argument("--T0", type=float, required=True)
     ap.add_argument("--sigma", type=float, required=True)
@@ -249,7 +257,12 @@ def main():
     ap.add_argument("--outdir", type=str, default="results_calibration")
     ap.add_argument("--measure_iter_time", action="store_true", 
                     help="Measure single iteration timing (for performance analysis)")
+    ap.add_argument("--use_original_model", action="store_true",
+                    help="Use original model (without numba) for performance comparison")
     args = ap.parse_args()
+    
+    # Set global flag for model selection
+    USE_ORIGINAL_MODEL = args.use_original_model
 
     os.makedirs(args.outdir, exist_ok=True)
 
