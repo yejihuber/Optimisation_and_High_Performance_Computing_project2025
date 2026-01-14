@@ -19,32 +19,28 @@ except ImportError:
         return decorator
     print("Warning: numba not available. Running without JIT compilation.")
 
-# Initial parameter array structure: [T0_1, T0_2, ..., T0_10, Ts0, Ts1, ..., Ts9, Td0, Td1, ..., Td9]
+# Initial parameter array structure: [T0_1, T0_2, ..., T0_10, Ts_1, Ts_2, ..., Ts_10, Td_1, Td_2, ..., Td_10]
 # Total: 10 T0 + 10 Ts + 10 Td = 30 parameters
-# T0_0 (first cycle start) is fixed, T0_1 to T0_10 are optimized
+
 T0_INITIAL = np.array([
-    1878.9166666667,  # T0_0 (fixed, not optimized)
-    1890.1666666667,  # T0_1 (optimized)
-    1902.0000000000,  # T0_2 (optimized)
-    1913.5833333333,  # T0_3 (optimized)
-    1923.5833333333,  # T0_4 (optimized)
-    1933.6666666667,  # T0_5 (optimized)
-    1944.0833333333,  # T0_6 (optimized)
-    1954.2500000000,  # T0_7 (optimized)
-    1964.7500000000,  # T0_8 (optimized)
-    1976.1666666667,  # T0_9 (optimized)
-    1986.6666666667   # T0_10 (optimized)
+    1878.9166666667,  # T0_1 
+    1890.1666666667,  # T0_2 
+    1902.0000000000,  # T0_3 
+    1913.5833333333,  # T0_4 
+    1923.5833333333,  # T0_5 
+    1933.6666666667,  # T0_6 
+    1944.0833333333,  # T0_7 
+    1954.2500000000,  # T0_8 
+    1964.7500000000,  # T0_9 
+    1976.1666666667  # T0_10 
 ], dtype=float)
 
-# Initial values: T0_1~T0_10 (10), Ts (10), Td (10) = 30 parameters
+# Initial values: T0 (10), Ts (10), Td (10) = 30 parameters
 X0 = np.concatenate([
-    T0_INITIAL[1:],  # T0_1 to T0_10 (10 values)
+    T0_INITIAL,            # T0 (10 values)
     np.array([0.3] * 10),  # Ts (10 values)
     np.array([5.0] * 10)   # Td (10 values)
 ], dtype=float)
-
-# Fixed first T0 value
-T0_FIXED = T0_INITIAL[0]
 
 DATA_FILE = "data_Team9.csv"
 
@@ -53,16 +49,19 @@ DATA_FILE = "data_Team9.csv"
 def model_original(t, x):
     """Original model implementation without numba optimization.
     Parameter structure: [T0_1, ..., T0_10, Ts0, ..., Ts9, Td0, ..., Td9] (30 params)
+    All T0 values (T0_1 to T0_10) will be optimized (no fixed T0 value)
     """
     n_cycles = 10
-    T0_optimized = x[:n_cycles]  # T0_1 to T0_10
-    Ts = x[n_cycles:2*n_cycles]  # Ts0 to Ts9
-    Td = x[2*n_cycles:]  # Td0 to Td9
+    T0_optimized = x[:n_cycles]  # T0_1 to T0_10 
+    Ts = x[n_cycles:2*n_cycles]  # Ts_1 to Ts_10
+    Td = x[2*n_cycles:]  # Td_1 to Td_10
     
-    # Build T0ARRAY: [T0_FIXED, T0_1, T0_2, ..., T0_10]
-    T0ARRAY = np.concatenate([[T0_FIXED], T0_optimized])
+    # T0ARRAY is directly set to T0 values from parameter vector x 
+    T0ARRAY = T0_optimized
     
-    intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(len(T0ARRAY) - 1)]
+    # Create intervals: (T0_1, T0_2), (T0_2, T0_3), ..., (T0_9, T0_10), (T0_10, inf)
+    # Note: We need 10 intervals for 10 T0 values
+    intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(n_cycles - 1)] + [(T0ARRAY[n_cycles - 1], np.inf)]
 
     t = np.atleast_1d(t)
     out = np.zeros_like(t, dtype=float)
@@ -78,21 +77,30 @@ def model_original(t, x):
 @njit(cache=True)
 def _model_numba_core(t_arr, Ts, Td, T0ARRAY):
     """Numba-optimized core computation.
-    T0ARRAY should include T0_FIXED as first element.
+    T0ARRAY contains T0_1 to T0_10 (values from parameter vector x, optimized by SA, no fixed T0).
+    We have 10 intervals: (T0_1, T0_2), ..., (T0_9, T0_10), (T0_10, inf)
     """
     n_points = len(t_arr)
-    n_phases = len(Ts)
+    n_phases = len(Ts)  # Should be 10
     out = np.zeros(n_points, dtype=np.float64)
     
     for i in range(n_points):
         t_val = t_arr[i]
         for ix in range(n_phases):
             a = T0ARRAY[ix]
-            b = T0ARRAY[ix + 1]
-            if a <= t_val < b:
-                diff = t_val - a
-                out[i] = (diff / Ts[ix]) ** 2 * np.exp(-(diff / Td[ix]) ** 2)
-                break
+            if ix < n_phases - 1:
+                # Regular intervals: (T0_ix, T0_ix+1)
+                b = T0ARRAY[ix + 1]
+                if a <= t_val < b:
+                    diff = t_val - a
+                    out[i] = (diff / Ts[ix]) ** 2 * np.exp(-(diff / Td[ix]) ** 2)
+                    break
+            else:
+                # Last interval: (T0_9, inf) - just check lower bound
+                if t_val >= a:
+                    diff = t_val - a
+                    out[i] = (diff / Ts[ix]) ** 2 * np.exp(-(diff / Td[ix]) ** 2)
+                    break
     return out
 
 
@@ -101,12 +109,12 @@ def model(t, x):
     Parameter structure: [T0_1, ..., T0_10, Ts0, ..., Ts9, Td0, ..., Td9] (30 params)
     """
     n_cycles = 10
-    T0_optimized = x[:n_cycles]  # T0_1 to T0_10
-    Ts = x[n_cycles:2*n_cycles]  # Ts0 to Ts9
-    Td = x[2*n_cycles:]  # Td0 to Td9
+    T0_optimized = x[:n_cycles]  # T0_1 to T0_10 (optimized values from SA)
+    Ts = x[n_cycles:2*n_cycles]  # Ts_1 to Ts_10
+    Td = x[2*n_cycles:]  # Td_1 to Td_10
     
-    # Build T0ARRAY: [T0_FIXED, T0_1, T0_2, ..., T0_10]
-    T0ARRAY = np.concatenate([[T0_FIXED], T0_optimized])
+    # T0ARRAY is directly set to T0 values from parameter vector x
+    T0ARRAY = T0_optimized
     
     t = np.atleast_1d(t)
     
@@ -114,7 +122,9 @@ def model(t, x):
         out = _model_numba_core(t, Ts, Td, T0ARRAY)
     else:
         # Fallback to original implementation
-        intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(len(T0ARRAY) - 1)]
+        # Create intervals: (T0_1, T0_2), (T0_2, T0_3), ..., (T0_9, T0_10), (T0_10, inf)
+        # Note: We need 10 intervals for 10 T0 values
+        intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(n_cycles - 1)] + [(T0ARRAY[n_cycles - 1], np.inf)]
         out = np.zeros_like(t, dtype=float)
         for ix, (a, b) in enumerate(intervals):
             mask = (a <= t) & (t < b)
@@ -233,8 +243,8 @@ def main():
     ap.add_argument("--T0", type=float, required=True)
     ap.add_argument("--sigma", type=float, required=True)
     ap.add_argument("--n_chains", type=int, default=10)
-    ap.add_argument("--n_iter", type=int, default=15000)
-    ap.add_argument("--burn_in", type=int, default=10000)
+    ap.add_argument("--n_iter", type=int, default=250000)
+    ap.add_argument("--burn_in", type=int, default=200000)
     ap.add_argument("--seed", type=int, default=777)
     ap.add_argument("--outdir", type=str, default="results_calibration")
     ap.add_argument("--measure_iter_time", action="store_true", 
