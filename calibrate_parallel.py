@@ -312,11 +312,13 @@ def main():
     # Create noisy initial conditions for each chain
     n_params = X0.shape[0]
     rng = np.random.default_rng(args.seed)
-    # For T0 parameters, use larger noise scale (time values are larger)
-    # For Ts and Td, use smaller noise scale
+    # Reduced noise scale to keep initial conditions closer to X0
+    # This helps maintain T0 values near initial values, especially with constraints
+    # T0: smaller noise (0.01 * abs + 0.1) to stay close to initial values
+    # Ts, Td: smaller noise (0.01 * abs + 1e-7) for consistency
     noise_scale = np.concatenate([
-        0.05 * np.abs(X0[:10]) + 1,  # T0 parameters: larger noise
-        0.05 * np.abs(X0[10:]) + 1e-6  # Ts and Td parameters: smaller noise
+        0.01 * np.abs(X0[:10]) + 0.1,  # T0 parameters: reduced noise (~0.5% of value)
+        0.01 * np.abs(X0[10:]) + 1e-7  # Ts and Td parameters: reduced noise (~3% of value)
     ])
     x0_list = np.abs(X0 + rng.normal(0, noise_scale, size=(args.n_chains, n_params)))
 
