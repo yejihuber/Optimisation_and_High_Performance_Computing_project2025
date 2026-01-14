@@ -42,7 +42,7 @@ python3 calibrate_parallel.py \
   --T0 "${T0_OPT}" \
   --sigma "${SIGMA_OPT}" \
   --n_chains 64 \
-  --n_iter 250000 \
-  --burn_in 200000 \
+  --n_iter 500000 \
+  --burn_in 400000 \
   --measure_iter_time \
-  --outdir results_calibration_64chains
+  --outdir results_calibration_64chains_500kiter_400kburnin
