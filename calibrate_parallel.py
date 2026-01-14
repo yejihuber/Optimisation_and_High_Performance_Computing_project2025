@@ -116,7 +116,7 @@ def model(t, x):
         return model_original(t, x)
     
     n_cycles = 10
-    T0 = x[:n_cycles]  # T0_1 to T0_10 (optimized values from SA)
+    T0 = x[:n_cycles]  # T0_1 to T0_10
     Ts = x[n_cycles:2*n_cycles]  # Ts_1 to Ts_10
     Td = x[2*n_cycles:]  # Td_1 to Td_10
     
@@ -145,6 +145,7 @@ def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0, measure_i
 
     x = x0.copy()
     n_params = x.shape[0]
+    n_cycles = 10  # Number of T0 parameters
 
     means = np.zeros(n_params)
     cov = np.diag(np.full(n_params, sigma))
@@ -154,6 +155,34 @@ def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0, measure_i
     T = T0
     keep_i = 0
     
+    # Constraints for T0 parameters: maintain order and stay close to initial values
+    # T0 values must satisfy: T0_1 < T0_2 < ... < T0_10
+    # And stay within ±5% of initial values
+    T0_bounds = np.column_stack([
+        T0_INITIAL * 0.95,  # Lower bounds (5% below initial)
+        T0_INITIAL * 1.05   # Upper bounds (5% above initial)
+    ])
+    
+    def apply_constraints(x_prop):
+        """Apply constraints to T0 parameters: order and bounds."""
+        x_constrained = x_prop.copy()
+        
+        # Apply bounds to T0 parameters
+        for i in range(n_cycles):
+            x_constrained[i] = np.clip(x_constrained[i], T0_bounds[i, 0], T0_bounds[i, 1])
+        
+        # Ensure T0 values are in ascending order
+        # If order is violated, adjust values to maintain order
+        for i in range(n_cycles - 1):
+            if x_constrained[i] >= x_constrained[i + 1]:
+                # If order is violated, move both values towards their midpoint
+                mid = (x_constrained[i] + x_constrained[i + 1]) / 2
+                # Ensure both stay within bounds
+                x_constrained[i] = np.clip(mid - 0.1, T0_bounds[i, 0], T0_bounds[i, 1])
+                x_constrained[i + 1] = np.clip(mid + 0.1, T0_bounds[i + 1, 0], T0_bounds[i + 1, 1])
+        
+        return x_constrained
+    
     # Measure single iteration time
     iter_times = []
     if measure_iter_time:
@@ -161,6 +190,7 @@ def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0, measure_i
         for it in range(1, min(101, n_iter + 1)):
             x_old = x
             x_prop = x_old + rng.multivariate_normal(means, cov)
+            x_prop = apply_constraints(x_prop)  # Apply T0 constraints
             dE = f(x_prop) - f(x_old)
             if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
                 x = x_prop
@@ -174,6 +204,7 @@ def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0, measure_i
             
             x_old = x
             x_prop = x_old + rng.multivariate_normal(means, cov)
+            x_prop = apply_constraints(x_prop)  # Apply T0 constraints
             dE = f(x_prop) - f(x_old)
             if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
                 x = x_prop
@@ -190,6 +221,7 @@ def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0, measure_i
         for it in range(101 + sample_size, n_iter + 1):
             x_old = x
             x_prop = x_old + rng.multivariate_normal(means, cov)
+            x_prop = apply_constraints(x_prop)  # Apply T0 constraints
             dE = f(x_prop) - f(x_old)
             if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
                 x = x_prop
@@ -202,6 +234,7 @@ def sa_optimize(x0, T0, sigma, f, n_iter=15000, burn_in=10000, seed=0, measure_i
         for it in range(1, n_iter + 1):
             x_old = x
             x_prop = x_old + rng.multivariate_normal(means, cov)
+            x_prop = apply_constraints(x_prop)  # Apply T0 constraints
             dE = f(x_prop) - f(x_old)
             if np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
                 x = x_prop
@@ -259,6 +292,8 @@ def main():
                     help="Measure single iteration timing (for performance analysis)")
     ap.add_argument("--use_original_model", action="store_true",
                     help="Use original model (without numba) for performance comparison")
+    ap.add_argument("--suffix", type=str, default="",
+                    help="Suffix to add to output filename (e.g., 'constraint_test')")
     args = ap.parse_args()
     
     # Set global flag for model selection
@@ -280,7 +315,7 @@ def main():
     # For T0 parameters, use larger noise scale (time values are larger)
     # For Ts and Td, use smaller noise scale
     noise_scale = np.concatenate([
-        0.05 * np.abs(X0[:10]) + 1.0,  # T0 parameters: larger noise
+        0.05 * np.abs(X0[:10]) + 1,  # T0 parameters: larger noise
         0.05 * np.abs(X0[10:]) + 1e-6  # Ts and Td parameters: smaller noise
     ])
     x0_list = np.abs(X0 + rng.normal(0, noise_scale, size=(args.n_chains, n_params)))
@@ -360,7 +395,10 @@ def main():
         out["max_iter_time_sec"] = float(np.max(all_iter_times))
 
     # Write one JSON per run so you can plot wall-time vs cores later
-    out_path = os.path.join(args.outdir, f"calib_workers{n_workers}_chains{args.n_chains}.json")
+    filename = f"calib_workers{n_workers}_chains{args.n_chains}"
+    if args.suffix:
+        filename += f"_{args.suffix}"
+    out_path = os.path.join(args.outdir, f"{filename}.json")
     with open(out_path, "w") as f:
         json.dump(out, f, indent=2)
 
