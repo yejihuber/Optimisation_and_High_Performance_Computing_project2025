@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --array=0
-#SBATCH --job-name=chaintest
+#SBATCH --array=0-5
+#SBATCH --job-name=ohpc-calib-scaling
 #SBATCH --time=0-02:00:00
 #SBATCH --partition=earth-3
 #SBATCH --nodes=1
@@ -41,8 +41,8 @@ echo "Running calibration with $N_CORES cores"
 python3 calibrate_parallel.py \
   --T0 "${T0_OPT}" \
   --sigma "${SIGMA_OPT}" \
-  --n_chains 64 \
-  --n_iter 250000 \
-  --burn_in 200000 \
+  --n_chains 32 \
+  --n_iter 500000 \
+  --burn_in 400000 \
   --measure_iter_time \
-  --outdir results_calibration_64chains
+  --outdir results_calibration_different_burnin
