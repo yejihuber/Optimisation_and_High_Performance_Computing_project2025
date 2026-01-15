@@ -25,8 +25,8 @@ SIGMA_OPT=${SIGMA_OPT:-1e-6}
 srun python3 calibrate_parallel.py \
   --T0 "${T0_OPT}" \
   --sigma "${SIGMA_OPT}" \
-  --n_chains 64 \
-  --n_iter 500000 \
-  --burn_in 400000 \
-  --suffix "noise_0.01" \
-  --outdir results_calibration_best_params
+  --n_chains 32 \
+  --n_iter 250000 \
+  --burn_in 200000 \
+  --suffix "noise_0.1" \
+  --outdir results_calibration_noise_test

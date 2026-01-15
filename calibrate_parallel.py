@@ -313,7 +313,7 @@ def main():
     rng = np.random.default_rng(args.seed)
     # Use small fixed noise scale like provided code: params0noisy = params_from_tuning + np.random.normal(0, 0.001, ...)
     # This keeps initial conditions very close to X0
-    noise_scale = 0.001  # Fixed small noise scale (not proportional to parameter values)
+    noise_scale = 0.01  # Fixed small noise scale (not proportional to parameter values)
     x0_list = np.abs(X0 + rng.normal(0, noise_scale, size=(args.n_chains, n_params)))
 
     # Prepare worker inputs
@@ -334,19 +334,15 @@ def main():
     wall = t1 - t0
     
     # Extract iteration timing if measured and collect all samples
+    # _worker_run_one_chain always returns (samples, iter_times) tuple
     iter_times_all = []
     all_samples_list = []
     
-    if args.measure_iter_time:
-        for r in results:
-            samples, iter_times = r
-            all_samples_list.append(samples)
-            if iter_times is not None:
-                iter_times_all.append(iter_times)
-    else:
-        for r in results:
-            samples = r
-            all_samples_list.append(samples)
+    for r in results:
+        samples, iter_times = r
+        all_samples_list.append(samples)
+        if args.measure_iter_time and iter_times is not None:
+            iter_times_all.append(iter_times)
     
     # Concatenate all samples from all chains into one array
     # Shape: (n_chains * (n_iter - burn_in), n_params)

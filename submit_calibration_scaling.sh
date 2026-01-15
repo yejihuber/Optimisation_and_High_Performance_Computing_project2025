@@ -25,7 +25,7 @@ module load DefaultModules
 module load USS/2022 gcc/9.4.0-pe5.34 python/3.9.12-pe5.34
 
 # Map array task ID to number of cores
-CORES_ARRAY=(1 2 4 8 16 32)
+CORES_ARRAY=(32)
 N_CORES=${CORES_ARRAY[$SLURM_ARRAY_TASK_ID]}
 
 # Performance test parameters
