@@ -6,90 +6,101 @@ import time
 import numpy as np
 import multiprocessing as mp
 import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend for cluster
+matplotlib.use('Agg')  # Non-interactive backend for cluster execution
 import matplotlib.pyplot as plt
 
 # -------------------------
-# Project-specific settings
+# Hyperparameter grids for SA tuning
 # -------------------------
 
-# 8 values for T0 (exactly as requested: 8x8=64)
+# 8 initial temperature values → combined with sigma gives 8x8 = 64 runs
 T0_GRID = np.array([0.10, 0.20, 0.50, 1.0, 2.0, 5.0, 8.0, 10.0], dtype=float)
 
-# 8 values for sigma (log spaced usually makes most sense)
+# 8 proposal scale values (log-spaced)
 SIGMA_GRID = np.logspace(-11, -4, 8, dtype=float)
 
-# Initial parameter array structure: [T0_1, T0_2, ..., T0_10, Ts1, Ts2, ..., Ts10, Td1, Td2, ..., Td10]
-# Total: 10 T0 + 10 Ts + 10 Td = 30 parameters
+# -------------------------
+# Initial parameter vector
+# -------------------------
+# Structure:
+# [T0_1, ..., T0_10, Ts_1, ..., Ts_10, Td_1, ..., Td_10]
+# Total: 30 parameters
 
 T0_INITIAL = np.array([
-    1878.9166666667,  # T0_1 
-    1890.1666666667,  # T0_2 
-    1902.0000000000,  # T0_3 
-    1913.5833333333,  # T0_4 
-    1923.5833333333,  # T0_5 
-    1933.6666666667,  # T0_6 
-    1944.0833333333,  # T0_7 
-    1954.2500000000,  # T0_8 
-    1964.7500000000,  # T0_9 
-    1976.1666666667  # T0_10 
+    1878.9166666667,
+    1890.1666666667,
+    1902.0000000000,
+    1913.5833333333,
+    1923.5833333333,
+    1933.6666666667,
+    1944.0833333333,
+    1954.2500000000,
+    1964.7500000000,
+    1976.1666666667
 ], dtype=float)
 
-# Initial values: T0 (10), Ts (10), Td (10) = 30 parameters
+# Concatenate full initial state vector
 X0 = np.concatenate([
-    T0_INITIAL,            # T0 (10 values)
-    np.array([0.3] * 10),  # Ts (10 values)
-    np.array([5.0] * 10)   # Td (10 values)
+    T0_INITIAL,            # T0 values
+    np.array([0.3] * 10),  # Ts values
+    np.array([5.0] * 10)   # Td values
 ], dtype=float)
 
+# Input data file (same as notebook)
 DATA_FILE = "data_Team9.csv"
 
-
 # -------------------------
-# Model + loss (same names as your notebook: model, mse)
+# Model and loss definition
 # -------------------------
 
 def model(t, x):
-    """Model function for 30-parameter optimization.
-    Parameter structure: [T0_1, ..., T0_10, Ts0, ..., Ts9, Td0, ..., Td9] (30 params)
-    All T0 values (T0_1 to T0_10) will be optimized (no fixed T0 value)
+    """
+    Model function used for SA tuning.
+    Parameter vector x contains 10 cycles with (T0, Ts, Td).
     """
     n_cycles = 10
-    T0_optimized = x[:n_cycles]  # T0_1 to T0_10 
-    Ts = x[n_cycles:2*n_cycles]  # Ts_1 to Ts_10
-    Td = x[2*n_cycles:]  # Td_1 to Td_10
+    T0_optimized = x[:n_cycles]
+    Ts = x[n_cycles:2*n_cycles]
+    Td = x[2*n_cycles:]
 
-    # T0ARRAY is directly set to T0 values from parameter vector x 
-    T0ARRAY = T0_optimized
-
-    # Create intervals: (T0_1, T0_2), (T0_2, T0_3), ..., (T0_9, T0_10), (T0_10, inf)
-    # Note: We need 10 intervals for 10 T0 values
-    intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(n_cycles - 1)] + [(T0ARRAY[n_cycles - 1], np.inf)]
+    # Define time intervals between successive T0 values
+    intervals = [(T0_optimized[ix], T0_optimized[ix + 1]) for ix in range(n_cycles - 1)] \
+                + [(T0_optimized[n_cycles - 1], np.inf)]
 
     t = np.atleast_1d(t)
     out = np.zeros_like(t, dtype=float)
 
+    # Evaluate model piecewise per cycle
     for ix, (a, b) in enumerate(intervals):
         mask = (a <= t) & (t < b)
-        out[mask] = ((t[mask] - T0ARRAY[ix]) / Ts[ix]) ** 2 * np.exp(-((t[mask] - T0ARRAY[ix]) / Td[ix]) ** 2)
+        out[mask] = ((t[mask] - T0_optimized[ix]) / Ts[ix]) ** 2 * \
+                    np.exp(-((t[mask] - T0_optimized[ix]) / Td[ix]) ** 2)
 
     return out.item() if out.size == 1 else out
 
 
-def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
-    rng = np.random.default_rng(seed)
+# -------------------------
+# Simulated annealing routine
+# -------------------------
 
-    # --- minimal fix: ensure int ---
+def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
+    """
+    Run simulated annealing for a given (T0, sigma) pair.
+    Returns the thinned parameter chain and loss history.
+    """
+    rng = np.random.default_rng(seed)
     n_iter = int(n_iter)
 
     x = x0.copy()
     n_params = x.shape[0]
 
+    # Mean-zero proposal distribution
     means = np.zeros(n_params)
 
-    # --- minimal fix: sigma is std-dev => covariance uses sigma**2 ---
+    # Diagonal proposal covariance (controlled by sigma)
     cov = np.diag(np.full(n_params, sigma))
 
+    # Allocate storage for thinned chain
     n_save = int(np.ceil(n_iter / thinning)) + 1
     chain = np.zeros((n_save, n_params), dtype=float)
     losses = np.zeros(n_save, dtype=float)
@@ -101,21 +112,22 @@ def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
     T = float(T0)
 
     for it in range(1, n_iter + 1):
+        # Propose new state
         x_old = x
         x_prop = x_old + rng.multivariate_normal(means, cov)
 
+        # Energy difference
         dE = f(x_prop) - f(x_old)
 
-        # --- minimal fix: always accept improvements; otherwise accept with exp(-dE/T) ---
+        # Metropolis acceptance step
         if dE <= 0 or np.exp(-np.clip(dE / max(T, 1e-12), -100, 100)) >= rng.random():
             x = x_prop
 
-        # linear cooling schedule
+        # Linear cooling schedule
         T = T0 * (1 - it / n_iter)
-
-        # --- minimal fix: keep T positive (avoid T=0 at end) ---
         T = max(T, 1e-12)
 
+        # Save thinned samples
         if it % thinning == 0:
             chain[save_i] = x
             losses[save_i] = f(x)
@@ -124,17 +136,23 @@ def sa_tune(x0, T0, sigma, f, n_iter=2.5e5, thinning=10, seed=0):
     return chain[:save_i], losses[:save_i]
 
 
+# -------------------------
+# Worker function (one grid point)
+# -------------------------
+
 def _worker_run_one_idx(args):
-    """Worker function to run one hyperparameter combination."""
+    """
+    Runs SA for a single hyperparameter index (one T0, sigma pair).
+    """
     (idx, n_iter, thinning, seed, outdir, time_points, data_points, save_plots) = args
 
-    # Map idx -> (i, j) for an 8x8 grid
+    # Map flat index to 8x8 grid
     i = idx // 8
     j = idx % 8
     T0 = float(T0_GRID[i])
     sigma = float(SIGMA_GRID[j])
 
-    # Define loss
+    # Define MSE loss (same as notebook)
     def mse(x):
         return float(np.mean((data_points - model(time_points, x)) ** 2))
 
@@ -146,28 +164,28 @@ def _worker_run_one_idx(args):
         f=mse,
         n_iter=n_iter,
         thinning=thinning,
-        seed=seed + idx,   # different seed per idx
+        seed=seed + idx
     )
     t_end = time.perf_counter()
 
     final_x = chain[-1].tolist()
     final_mse = float(loss_hist[-1])
 
-    # Create visualization: MSE curve over iterations (similar to notebook)
+    # Optionally save MSE convergence plot
     plot_path = None
     if save_plots:
         plt.figure(figsize=(10, 6))
-        plt.plot(loss_hist, linewidth=1.5)
-        plt.xlabel('Iteration (thinned)', fontsize=12)
-        plt.ylabel('MSE', fontsize=12)
-        plt.title(f'Tuning idx={idx}: T0={T0}, σ={sigma:.2e}\nFinal MSE={final_mse:.6e}', fontsize=12)
-        plt.grid(True, alpha=0.3)
-        plt.yscale('log')  # Log scale often better for MSE
-
+        plt.plot(loss_hist)
+        plt.xlabel("Iteration (thinned)")
+        plt.ylabel("MSE")
+        plt.yscale("log")
+        plt.title(f"Tuning idx={idx}, T0={T0}, sigma={sigma}")
+        plt.grid(alpha=0.3)
         plot_path = os.path.join(outdir, f"mse_curve_{idx:02d}.png")
-        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.savefig(plot_path, dpi=150, bbox_inches="tight")
         plt.close()
 
+    # Save results to JSON
     out = {
         "idx": idx,
         "T0": T0,
@@ -187,66 +205,58 @@ def _worker_run_one_idx(args):
     return f"[idx={idx}] T0={T0} sigma={sigma} final_mse={final_mse} -> {out_path}{plot_msg}"
 
 
+# -------------------------
+# Main entry point
+# -------------------------
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--idx", type=int, default=None, help="Single idx (0..63) or None for parallel mode")
-    ap.add_argument("--start_idx", type=int, default=None, help="Start idx for parallel mode (inclusive)")
-    ap.add_argument("--end_idx", type=int, default=None, help="End idx for parallel mode (exclusive)")
+    ap.add_argument("--idx", type=int, default=None)
+    ap.add_argument("--start_idx", type=int, default=None)
+    ap.add_argument("--end_idx", type=int, default=None)
     ap.add_argument("--outdir", type=str, default="results_tuning")
     ap.add_argument("--n_iter", type=int, default=250000)
     ap.add_argument("--thinning", type=int, default=10)
     ap.add_argument("--seed", type=int, default=1234)
-    ap.add_argument("--save_plots", action="store_true", default=True, help="Save MSE curve plots (default: True)")
-    ap.add_argument("--no_plots", dest="save_plots", action="store_false", help="Disable plot saving")
+    ap.add_argument("--save_plots", action="store_true", default=True)
+    ap.add_argument("--no_plots", dest="save_plots", action="store_false")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
 
-    # Load data once (shared across workers)
+    # Load data once and share with workers
     data = np.loadtxt(DATA_FILE, delimiter=",", skiprows=1)
     time_points = data[:, 0]
     data_points = data[:, 1]
 
-    # Determine which indices to run
+    # Determine which tuning indices to run
     if args.idx is not None:
-        # Single index mode (backward compatible)
-        idx = args.idx
-        if idx < 0 or idx >= 64:
-            raise ValueError("idx must be in [0, 63]")
-        indices = [idx]
+        indices = [args.idx]
     elif args.start_idx is not None and args.end_idx is not None:
-        # Parallel mode: run range of indices
         indices = list(range(args.start_idx, args.end_idx))
-        if any(idx < 0 or idx >= 64 for idx in indices):
-            raise ValueError("All indices must be in [0, 63]")
     else:
-        raise ValueError("Must specify either --idx or both --start_idx and --end_idx")
+        raise ValueError("Must specify --idx or --start_idx and --end_idx")
 
-    # Use SLURM CPU allocation if present, otherwise use all available cores
+    # Use SLURM CPU allocation if available
     n_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", mp.cpu_count()))
-
-    # Don't use more workers than indices
     n_workers = min(n_workers, len(indices))
 
-    # Prepare worker inputs
     worker_inputs = [
-        (idx, args.n_iter, args.thinning, args.seed, args.outdir, time_points, data_points, args.save_plots)
+        (idx, args.n_iter, args.thinning, args.seed,
+         args.outdir, time_points, data_points, args.save_plots)
         for idx in indices
     ]
 
     t_total_start = time.perf_counter()
 
     if n_workers == 1 or len(indices) == 1:
-        # Sequential execution
         results = list(map(_worker_run_one_idx, worker_inputs))
     else:
-        # Parallel execution
         with mp.Pool(processes=n_workers) as pool:
             results = pool.map(_worker_run_one_idx, worker_inputs)
 
     t_total_end = time.perf_counter()
 
-    # Print all results
     for result in results:
         print(result)
 
