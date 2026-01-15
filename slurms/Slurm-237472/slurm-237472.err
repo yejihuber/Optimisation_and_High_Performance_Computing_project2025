@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/calibrate_parallel.py", line 441, in <module>
+    main()
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/calibrate_parallel.py", line 353, in main
+    all_samples = np.vstack(all_samples_list)
+  File "/cfs/earth/scratch/huberyej/.local/lib/python3.9/site-packages/numpy/_core/shape_base.py", line 284, in vstack
+    arrs = atleast_2d(*tup)
+  File "/cfs/earth/scratch/huberyej/.local/lib/python3.9/site-packages/numpy/_core/shape_base.py", line 121, in atleast_2d
+    ary = asanyarray(ary)
+ValueError: setting an array element with a sequence. The requested array has an inhomogeneous shape after 1 dimensions. The detected shape was (2,) + inhomogeneous part.
+srun: error: node018: task 0: Exited with exit code 1

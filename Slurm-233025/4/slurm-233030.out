@@ -1,9 +1,0 @@
-Running calibration with 16 cores
-Warning: numba not available. Running without JIT compilation.
-
-Collected 10 independent runs
-Chain means array shape: (10, 20)
-Center of Mass (best estimation) shape: (20,)
-Number of model parameters: 20
-Saved calibration result -> results_calibration/calib_workers16_chains10.json
-Workers=16 wall_time=489.55s final_mse=nan

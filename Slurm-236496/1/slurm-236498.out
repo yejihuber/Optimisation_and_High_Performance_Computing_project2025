@@ -1,8 +1,0 @@
-Running calibration with 2 cores
-
-Collected 10 independent runs
-Chain means array shape: (10, 30)
-Center of Mass (best estimation) shape: (30,)
-Number of model parameters: 30
-Saved calibration result -> results_calibration/calib_workers2_chains10.json
-Workers=2 wall_time=2337.22s final_mse=11785.8

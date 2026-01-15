@@ -1,0 +1,33 @@
+multiprocessing.pool.RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/cfs/software/uss/2022/spack/linux-rocky8-x86_64/gcc-9.4.0/python-3.9.12-jykb7a27mrjzr25hajztnwc4iq2bhuxy/lib/python3.9/multiprocessing/pool.py", line 125, in worker
+    result = (True, func(*args, **kwds))
+  File "/cfs/software/uss/2022/spack/linux-rocky8-x86_64/gcc-9.4.0/python-3.9.12-jykb7a27mrjzr25hajztnwc4iq2bhuxy/lib/python3.9/multiprocessing/pool.py", line 48, in mapstar
+    return list(map(*args))
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/tune_sa.py", line 141, in _worker_run_one_idx
+    chain, loss_hist = sa_tune(
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/tune_sa.py", line 97, in sa_tune
+    losses[0] = f(x)
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/tune_sa.py", line 138, in mse
+    return float(np.mean((data_points - model(time_points, x)) ** 2))
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/tune_sa.py", line 66, in model
+    intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(n_cycles - 1)] + [(T0ARRAY[n_cycles - 1], np.inf)]
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/tune_sa.py", line 66, in <listcomp>
+    intervals = [(T0ARRAY[ix], T0ARRAY[ix + 1]) for ix in range(n_cycles - 1)] + [(T0ARRAY[n_cycles - 1], np.inf)]
+NameError: name 'T0ARRAY' is not defined
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/tune_sa.py", line 257, in <module>
+    main()
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/tune_sa.py", line 244, in main
+    results = pool.map(_worker_run_one_idx, worker_inputs)
+  File "/cfs/software/uss/2022/spack/linux-rocky8-x86_64/gcc-9.4.0/python-3.9.12-jykb7a27mrjzr25hajztnwc4iq2bhuxy/lib/python3.9/multiprocessing/pool.py", line 364, in map
+    return self._map_async(func, iterable, mapstar, chunksize).get()
+  File "/cfs/software/uss/2022/spack/linux-rocky8-x86_64/gcc-9.4.0/python-3.9.12-jykb7a27mrjzr25hajztnwc4iq2bhuxy/lib/python3.9/multiprocessing/pool.py", line 771, in get
+    raise self._value
+NameError: name 'T0ARRAY' is not defined
+srun: error: node023: task 0: Exited with exit code 1

@@ -1,7 +1,0 @@
-
-Collected 1600000 samples from 32 chains
-Total samples shape: (1600000, 30)
-Calculating histogram-based center of mass for 30 parameters...
-Center of Mass shape: (30,)
-Saved calibration result -> results_calibration_noise_test/calib_workers32_chains32_noise_0.0001.json
-Workers=32 wall_time=537.10s final_mse=562.125

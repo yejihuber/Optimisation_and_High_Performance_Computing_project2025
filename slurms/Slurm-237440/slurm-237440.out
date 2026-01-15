@@ -1,0 +1,15 @@
+Running calibration with 32 cores
+
+Performance Analysis:
+  Average single iteration time: 2.1194 ms
+  Std deviation: 0.1252 ms
+  Wall time per iteration (wall_time/n_iter): 2.1348 ms
+  Total iterations: 250000
+  Measured iterations: 32000
+
+Collected 1600000 samples from 32 chains
+Total samples shape: (1600000, 30)
+Calculating histogram-based center of mass for 30 parameters...
+Center of Mass shape: (30,)
+Saved calibration result -> results_calibration/calib_workers32_chains32.json
+Workers=32 wall_time=533.70s final_mse=562.23

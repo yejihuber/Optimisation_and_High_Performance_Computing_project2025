@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/calibrate_parallel.py", line 441, in <module>
+    main()
+  File "/cfs/earth/scratch/huberyej/Optimisation_and_High_Performance_Computing_project2025/calibrate_parallel.py", line 303, in main
+    n_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
+ValueError: invalid literal for int() with base 10: ''
