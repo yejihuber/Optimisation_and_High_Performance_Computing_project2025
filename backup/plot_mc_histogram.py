@@ -13,7 +13,7 @@ from pathlib import Path
 # Import model and data loading from calibrate_parallel
 import sys
 sys.path.insert(0, '.')
-from calibrate_parallel import (
+from Optimisation_and_High_Performance_Computing_project2025.team9_OHPC_submission.src.calibrate_parallel import (
     X0, DATA_FILE, model
 )
 
