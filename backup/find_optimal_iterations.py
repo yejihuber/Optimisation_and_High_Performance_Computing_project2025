@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 sys.path.insert(0, '.')
-from calibrate_parallel import X0, DATA_FILE, model
+from Optimisation_and_High_Performance_Computing_project2025.team9_OHPC_submission.src.calibrate_parallel import X0, DATA_FILE, model
 from plot_mc_histogram import sa_optimize_with_trace
 
 
